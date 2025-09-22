@@ -80,7 +80,8 @@
         }
 
         .form-group input,
-        .form-group select {
+        .form-group select,
+        .form-group textarea {
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -89,7 +90,8 @@
         }
 
         .form-group input:focus,
-        .form-group select:focus {
+        .form-group select:focus,
+        .form-group textarea:focus {
             outline: none;
             border-color: #3498db;
         }
@@ -303,6 +305,40 @@
                 </form>
             </div>
 
+            <!-- Paraphrase SMS Template Section -->
+            <div class="section">
+                <h2>Paraphrase Existing SMS Template</h2>
+                <form id="paraphraseForm">
+                    <div class="form-group">
+                        <label for="originalSms">Original SMS Template</label>
+                        <textarea id="originalSms" name="original_sms" rows="3" placeholder="e.g., Dear Bett, Your loan payment is late by 203 days. Amount in arrears is KES 1,200. Please pay immediately. For inquiry call 0711049000" required></textarea>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="paraphraseCustomerName">Customer Name (for context)</label>
+                            <input type="text" id="paraphraseCustomerName" name="customer_name" placeholder="e.g., Bett" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="paraphraseLoanBalance">Loan Balance (for context)</label>
+                            <input type="text" id="paraphraseLoanBalance" name="loan_balance" placeholder="e.g., KES 1,200" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="paraphraseDueDate">Due Date/Status (for context)</label>
+                            <input type="text" id="paraphraseDueDate" name="due_date" placeholder="e.g., late by 203 days" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="paraphraseTone">Target Tone</label>
+                            <select id="paraphraseTone" name="tone" required>
+                                <option value="formal">Formal</option>
+                                <option value="friendly">Friendly</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn">Paraphrase SMS</button>
+                </form>
+            </div>
+
             <!-- Bulk Generation -->
             <div class="section">
                 <h2>Generate SMS for All Customers</h2>
@@ -321,11 +357,13 @@
 
         // DOM elements
         const singleCustomerForm = document.getElementById('singleCustomerForm');
+        const paraphraseForm = document.getElementById('paraphraseForm');
         const generateAllBtn = document.getElementById('generateAllBtn');
         const resultsDiv = document.getElementById('results');
 
         // Event listeners
         singleCustomerForm.addEventListener('submit', handleSingleCustomer);
+        paraphraseForm.addEventListener('submit', handleParaphraseSMS);
         generateAllBtn.addEventListener('click', handleGenerateAll);
 
         // Handle single customer form submission
@@ -358,6 +396,36 @@
             }
         }
 
+        // Handle paraphrase form submission
+        async function handleParaphraseSMS(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(paraphraseForm);
+            const paraphraseData = Object.fromEntries(formData);
+            
+            showLoading();
+            
+            try {
+                const response = await fetch(`${API_BASE}/paraphrase`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(paraphraseData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayParaphraseResult(data);
+                } else {
+                    showError(data.error || 'Failed to paraphrase SMS');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        }
+
         // Handle generate all button click
         async function handleGenerateAll() {
             showLoading();
@@ -383,6 +451,38 @@
                     <h2>Generated SMS Messages</h2>
                     ${createCustomerResultHTML(data)}
                     ${createStatsHTML([data])}
+                </div>
+            `;
+            resultsDiv.innerHTML = html;
+        }
+
+        // Display paraphrased result
+        function displayParaphraseResult(data) {
+            const html = `
+                <div class="section">
+                    <h2>Paraphrased SMS Messages</h2>
+                    <div class="customer-result">
+                        <div class="customer-info">
+                            <h3>Original SMS:</h3>
+                            <p>${data.original_sms}</p>
+                            <p><strong>Target Tone:</strong> ${data.tone}</p>
+                        </div>
+                        ${data.paraphrased_variations.map((sms, index) => createSMSVariationHTML(sms, index + 1)).join('')}
+                    </div>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-number">1</div>
+                            <div class="stat-label">Template Processed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${data.paraphrased_variations.length}</div>
+                            <div class="stat-label">SMS Generated</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${Math.round(data.paraphrased_variations.reduce((sum, sms) => sum + sms.length, 0) / data.paraphrased_variations.length)}</div>
+                            <div class="stat-label">Avg. Characters</div>
+                        </div>
+                    </div>
                 </div>
             `;
             resultsDiv.innerHTML = html;
@@ -496,3 +596,4 @@
     </script>
 </body>
 </html>
+

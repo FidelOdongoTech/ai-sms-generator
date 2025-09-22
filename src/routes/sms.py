@@ -80,3 +80,38 @@ def get_tones():
         'tones': ['formal', 'friendly', 'urgent']
     })
 
+
+
+@sms_bp.route("/paraphrase", methods=["POST"])
+def paraphrase_sms():
+    """
+    Paraphrase a given SMS template into different tones.
+    """
+    try:
+        data = request.get_json()
+
+        required_fields = ["original_sms", "customer_name", "loan_balance", "due_date", "tone"]
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        paraphrased_variations = generator.paraphrase_sms_template(
+            data["original_sms"],
+            data["customer_name"],
+            data["loan_balance"],
+            data["due_date"],
+            data["tone"],
+            count=3
+        )
+
+        return jsonify({
+            "success": True,
+            "original_sms": data["original_sms"],
+            "tone": data["tone"],
+            "paraphrased_variations": paraphrased_variations
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
