@@ -82,6 +82,7 @@ def get_tones():
 
 
 
+
 @sms_bp.route("/paraphrase", methods=["POST"])
 def paraphrase_sms():
     """
@@ -113,5 +114,6 @@ def paraphrase_sms():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
