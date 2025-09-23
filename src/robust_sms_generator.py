@@ -8,25 +8,6 @@ class RobustSMSGenerator:
         self.model_name = model_name
         self.ollama_url = "http://localhost:11434/api/generate"
     
-    def _generate_ollama_response(self, prompt, max_tokens=40):
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.7, # Increased temperature for more creative variations
-                "max_tokens": max_tokens
-            }
-        }
-        try:
-            response = requests.post(self.ollama_url, json=payload, timeout=20) # Increased timeout
-            response.raise_for_status()
-            result = response.json()
-            return result.get("response", "").strip()
-        except requests.exceptions.RequestException as e:
-            print(f"Ollama API error: {e}")
-            return ""
-
     def generate_template_sms(self, customer_name, loan_balance, due_date, tone="formal"):
         """
         Generate SMS using predefined templates with variations
@@ -62,48 +43,35 @@ class RobustSMSGenerator:
         """
         Try to enhance template SMS with AI, fallback to template if AI fails
         """
-        prompt = f"Improve this SMS to be more {tone} while keeping it under 160 characters: \'{template_sms}\'"
+        prompt = f"Improve this SMS to be more {tone} while keeping it under 160 characters: '{template_sms}'"
         
-        enhanced_text = self._generate_ollama_response(prompt)
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "max_tokens": 40
+            }
+        }
+        
+        try:
+            response = requests.post(self.ollama_url, json=payload, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            enhanced_text = result.get("response", "").strip()
             
-        # Validate the enhanced text
-        if (len(enhanced_text) <= 160 and 
-            customer_name in enhanced_text and 
-            loan_balance in enhanced_text and 
-            "Co-op Bank" in enhanced_text):
-            return enhanced_text
-        else:
+            # Validate the enhanced text
+            if (len(enhanced_text) <= 160 and 
+                customer_name in enhanced_text and 
+                loan_balance in enhanced_text and 
+                "Co-op Bank" in enhanced_text):
+                return enhanced_text
+            else:
+                return template_sms
+        except:
             return template_sms
-
-    def paraphrase_sms_template(self, original_sms, customer_name, loan_balance, due_date, tone="formal", count=3):
-        """
-        Paraphrase a given SMS template into different tones using AI.
-        """
-        paraphrased_variations = []
-        for _ in range(count):
-            prompt = (
-                f"Paraphrase the following SMS message to be more {tone} in tone. "
-                f"Ensure it includes the customer name \'{customer_name}\' (if applicable), "
-                f"loan balance \'{loan_balance}\' (if applicable), "
-                f"due date \'{due_date}\' (if applicable), and mentions \'Co-op Bank\'. "
-                f"Keep the message strictly under 160 characters. "
-                f"Original SMS: \'{original_sms}\'"
-            )
-            paraphrased_sms = self._generate_ollama_response(prompt, max_tokens=50) # Increased max_tokens for paraphrasing
-            
-            # Basic validation and fallback
-            if not paraphrased_sms or len(paraphrased_sms) > 160:
-                # If AI fails or generates too long, try a simpler prompt or use original
-                simple_prompt = (
-                    f"Rewrite this SMS in a {tone} tone, under 160 chars: \'{original_sms}\'"
-                )
-                paraphrased_sms = self._generate_ollama_response(simple_prompt, max_tokens=50)
-                if not paraphrased_sms or len(paraphrased_sms) > 160:
-                    paraphrased_sms = original_sms[:157] + "..." if len(original_sms) > 160 else original_sms
-
-            paraphrased_variations.append(paraphrased_sms)
-        return paraphrased_variations
-
+    
     def generate_sms_variations(self, customer_name, loan_balance, due_date, tone="formal", count=3):
         """
         Generate multiple SMS variations using templates and AI enhancement
@@ -146,6 +114,42 @@ class RobustSMSGenerator:
         
         return results
     
+    def paraphrase_sms_template(self, original_sms, customer_name, loan_balance, due_date, tone="formal", count=3):
+        """
+        Paraphrase a given SMS template using AI.
+        """
+        variations = []
+        for i in range(count):
+            prompt = f"Paraphrase the following SMS message to be more {tone} and incorporate the details: Customer Name: {customer_name}, Loan Balance: {loan_balance}, Due Date: {due_date}. Keep it under 160 characters. Original SMS: \'{original_sms}\'"
+            
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7, # Higher temperature for more creative paraphrasing
+                    "max_tokens": 60 # Allow more tokens for paraphrased output
+                }
+            }
+            
+            try:
+                response = requests.post(self.ollama_url, json=payload, timeout=15)
+                response.raise_for_status()
+                result = response.json()
+                paraphrased_text = result.get("response", "").strip()
+                
+                # Basic validation and truncation
+                if paraphrased_text and len(paraphrased_text) <= 160:
+                    variations.append(paraphrased_text)
+                elif paraphrased_text:
+                    variations.append(paraphrased_text[:157] + "...")
+                else:
+                    variations.append(original_sms) # Fallback to original if AI fails
+            except Exception as e:
+                print(f"Error during AI paraphrasing: {e}")
+                variations.append(original_sms) # Fallback to original on error
+        return variations
+
     def export_to_json(self, results, filename="sms_results.json"):
         """
         Export results to JSON file for easy integration with SMS systems
@@ -177,31 +181,6 @@ if __name__ == "__main__":
         for i, sms in enumerate(variations, 1):
             print(f"SMS {i}: {sms}")
             print(f"       Length: {len(sms)} characters")
-
-    # Test paraphrasing functionality
-    print("\n" + "=" * 50)
-    print("Testing SMS Paraphrasing...")
-    original_sms_template = "Dear Bett, Your loan payment is late by 203 days. Amount in arrears is KES 1,200. Please pay immediately. For inquiry call 0711049000"
-    customer_name_for_paraphrase = "Bett"
-    loan_balance_for_paraphrase = "KES 1,200"
-    due_date_for_paraphrase = "late by 203 days"
-
-    print(f"\n--- Original SMS: {original_sms_template} ---")
-
-    for tone_type in ["formal", "friendly", "urgent"]:
-        print(f"\n--- Paraphrasing to {tone_type.capitalize()} Tone ---")
-        paraphrased_sms = generator.paraphrase_sms_template(
-            original_sms_template,
-            customer_name_for_paraphrase,
-            loan_balance_for_paraphrase,
-            due_date_for_paraphrase,
-            tone=tone_type,
-            count=3
-        )
-        for i, sms in enumerate(paraphrased_sms, 1):
-            print(f"SMS {i}: {sms}")
-            print(f"       Length: {len(sms)} characters")
-
     
     # Process all customers and export
     print("\n" + "=" * 50)
