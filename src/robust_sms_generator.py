@@ -43,7 +43,7 @@ class RobustSMSGenerator:
         """
         Try to enhance template SMS with AI, fallback to template if AI fails
         """
-        prompt = f"Improve this SMS to be more {tone} while keeping it under 160 characters: '{template_sms}'"
+        prompt = f"Improve this SMS to be more {tone} while keeping it under 160 characters: ‘{template_sms}’"
         
         payload = {
             "model": self.model_name,
@@ -51,7 +51,7 @@ class RobustSMSGenerator:
             "stream": False,
             "options": {
                 "temperature": 0.3,
-                "max_tokens": 40
+                "max_tokens": 100
             }
         }
         
@@ -120,7 +120,7 @@ class RobustSMSGenerator:
         """
         variations = []
         for i in range(count):
-            prompt = f"Paraphrase the following SMS message to be more {tone} and incorporate the details: Customer Name: {customer_name}, Loan Balance: {loan_balance}, Due Date: {due_date}. Keep it under 160 characters. Original SMS: \'{original_sms}\'"
+            prompt = f"Paraphrase the following SMS message to be more {tone} and incorporate the details: Customer Name: {customer_name}, Loan Balance: {loan_balance}, Due Date: {due_date}. Keep it under 160 characters. Original SMS: \u2018{original_sms}\u2019"
             
             payload = {
                 "model": self.model_name,
@@ -128,7 +128,7 @@ class RobustSMSGenerator:
                 "stream": False,
                 "options": {
                     "temperature": 0.7, # Higher temperature for more creative paraphrasing
-                    "max_tokens": 60 # Allow more tokens for paraphrased output
+                    "max_tokens": 160 # Allow more tokens for paraphrased output
                 }
             }
             
@@ -197,5 +197,4 @@ if __name__ == "__main__":
     print(f"📱 Total SMS variations generated: {total_sms}")
     
     print("\n🚀 Ready for integration with SMS systems!")
-
 
